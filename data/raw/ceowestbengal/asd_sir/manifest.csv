@@ -1,0 +1,4 @@
+district_id,district_name,ac_id,ac_name,ps_id,ps_name,doc_type,source_url,local_path,status,error
+1,COOCHBEHAR,1,Mekliganj,1,Chhat Dhulia Baldiahati Aided Primary School,asd,https://voters.eci.gov.in/eroll/asd/2025/s25/1/uncollectable_elector_report_ac1_part1.pdf,data\raw\ceowestbengal\asd_sir\asd\1_coochbehar\001_mekliganj\uncollectable_elector_report_ac1_part1.pdf,downloaded,
+1,COOCHBEHAR,1,Mekliganj,2,Tarun S. S. K,asd,https://voters.eci.gov.in/eroll/asd/2025/s25/1/uncollectable_elector_report_ac1_part2.pdf,data\raw\ceowestbengal\asd_sir\asd\1_coochbehar\001_mekliganj\uncollectable_elector_report_ac1_part2.pdf,downloaded,
+1,COOCHBEHAR,1,Mekliganj,3,142 Kamat Changrabandha Fifth Plan Primary School,asd,https://voters.eci.gov.in/eroll/asd/2025/s25/1/uncollectable_elector_report_ac1_part3.pdf,data\raw\ceowestbengal\asd_sir\asd\1_coochbehar\001_mekliganj\uncollectable_elector_report_ac1_part3.pdf,downloaded,
