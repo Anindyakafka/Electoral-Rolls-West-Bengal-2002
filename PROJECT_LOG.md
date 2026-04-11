@@ -7,3 +7,4 @@
 - Routed scraper output to `data/raw/ceowestbengal/asd_sir/` and added a download manifest layout.
 - Added SSL compatibility for Python 3.13 / OpenSSL 3 so the downloader can connect to the CEO West Bengal site locally.
 - Added parallel worker support (`--workers`) so multiple districts and PDFs can be processed concurrently.
+- Changed the scraper default output location to `D:\Electoral roll\ceowestbengal\asd_sir\` to avoid low system drive space.
