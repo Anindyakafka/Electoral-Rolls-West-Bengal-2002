@@ -36,6 +36,7 @@ import argparse
 import csv
 import json
 import re
+import ssl
 import sys
 import time
 from html import unescape
@@ -58,6 +59,17 @@ DOC_TYPE_MAP = {
 }
 
 
+def build_ssl_context() -> ssl.SSLContext:
+    context = ssl.create_default_context()
+    legacy_flag = getattr(ssl, "OP_LEGACY_SERVER_CONNECT", 0)
+    if legacy_flag:
+        context.options |= legacy_flag
+    return context
+
+
+SSL_CONTEXT = build_ssl_context()
+
+
 def repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
@@ -71,7 +83,7 @@ def fetch_text(url: str, params: Optional[Dict[str, object]] = None, timeout: in
         url = f"{url}{joiner}{urlencode(params)}"
 
     request = Request(url, headers=HEADERS)
-    with urlopen(request, timeout=timeout) as response:
+    with urlopen(request, timeout=timeout, context=SSL_CONTEXT) as response:
         charset = response.headers.get_content_charset() or "utf-8"
         return response.read().decode(charset, errors="replace")
 
@@ -185,7 +197,7 @@ def download_file(url: str, destination: Path, overwrite: bool = False, dry_run:
         return "dry-run"
 
     request = Request(url, headers=HEADERS)
-    with urlopen(request, timeout=120) as response:
+    with urlopen(request, timeout=120, context=SSL_CONTEXT) as response:
         content = response.read()
 
     destination.write_bytes(content)
