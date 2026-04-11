@@ -76,7 +76,7 @@ def repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
-DEFAULT_OUTPUT_ROOT = repo_root() / "data" / "raw" / "ceowestbengal" / "asd_sir"
+DEFAULT_OUTPUT_ROOT = Path(r"D:\Electoral roll") / "ceowestbengal" / "asd_sir"
 PRINT_LOCK = Lock()
 
 
