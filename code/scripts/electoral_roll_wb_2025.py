@@ -39,9 +39,10 @@ import re
 import ssl
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from html import unescape
 from pathlib import Path
-from typing import Dict, Iterable, Iterator, List, Optional
+from typing import Dict, Iterable, List, Optional, Tuple
 from urllib.parse import urlencode, urljoin, urlsplit
 from urllib.request import Request, urlopen
 
@@ -139,33 +140,34 @@ def filter_districts(districts: List[Dict[str, str]], district_filter: Optional[
     return filtered
 
 
-def iter_pdf_records(
-    districts: List[Dict[str, str]],
+def collect_records_for_district(
+    district: Dict[str, str],
     doc_types: Iterable[str],
     ac_filter: Optional[int],
     delay_seconds: float,
-) -> Iterator[Dict[str, object]]:
-    for district in districts:
-        dist_id = district["distId"]
-        ac_rows = fetch_json(BASE_URL, {"handler": "AC", "distId": dist_id})
-        print(f"[district {dist_id}] {district['name']} -> {len(ac_rows)} ACs", flush=True)
+) -> List[Dict[str, object]]:
+    records: List[Dict[str, object]] = []
+    dist_id = district["distId"]
+    ac_rows = fetch_json(BASE_URL, {"handler": "AC", "distId": dist_id})
+    print(f"[district {dist_id}] {district['name']} -> {len(ac_rows)} ACs", flush=True)
 
-        for ac in ac_rows:
-            ac_id = int(ac["acId"])
-            ac_name = clean_whitespace(ac["name"])
-            if ac_filter is not None and ac_id != ac_filter:
-                continue
+    for ac in ac_rows:
+        ac_id = int(ac["acId"])
+        ac_name = clean_whitespace(ac["name"])
+        if ac_filter is not None and ac_id != ac_filter:
+            continue
 
-            ps_rows = fetch_json(BASE_URL, {"handler": "PS", "acId": ac_id})
-            print(f"  [ac {ac_id}] {ac_name} -> {len(ps_rows)} parts", flush=True)
+        ps_rows = fetch_json(BASE_URL, {"handler": "PS", "acId": ac_id})
+        print(f"  [ac {ac_id}] {ac_name} -> {len(ps_rows)} parts", flush=True)
 
-            for row in ps_rows:
-                for doc_type in doc_types:
-                    pdf_url = (row.get(doc_type) or "").strip()
-                    if not pdf_url or pdf_url == "#":
-                        continue
+        for row in ps_rows:
+            for doc_type in doc_types:
+                pdf_url = (row.get(doc_type) or "").strip()
+                if not pdf_url or pdf_url == "#":
+                    continue
 
-                    yield {
+                records.append(
+                    {
                         "district_id": dist_id,
                         "district_name": district["name"],
                         "ac_id": ac_id,
@@ -175,9 +177,37 @@ def iter_pdf_records(
                         "doc_type": doc_type,
                         "source_url": urljoin(BASE_URL, pdf_url),
                     }
+                )
 
-            if delay_seconds:
-                time.sleep(delay_seconds)
+        if delay_seconds:
+            time.sleep(delay_seconds)
+
+    return records
+
+
+def collect_pdf_records(
+    districts: List[Dict[str, str]],
+    doc_types: Iterable[str],
+    ac_filter: Optional[int],
+    delay_seconds: float,
+    workers: int,
+) -> List[Dict[str, object]]:
+    if workers <= 1 or len(districts) <= 1:
+        records: List[Dict[str, object]] = []
+        for district in districts:
+            records.extend(collect_records_for_district(district, doc_types, ac_filter, delay_seconds))
+    else:
+        records = []
+        with ThreadPoolExecutor(max_workers=min(workers, len(districts))) as executor:
+            futures = {
+                executor.submit(collect_records_for_district, district, doc_types, ac_filter, delay_seconds): district
+                for district in districts
+            }
+            for future in as_completed(futures):
+                records.extend(future.result())
+
+    records.sort(key=lambda item: (str(item["district_id"]), int(item["ac_id"]), int(item["ps_id"]), str(item["doc_type"])))
+    return records
 
 
 def output_path(output_root: Path, record: Dict[str, object]) -> Path:
@@ -204,6 +234,27 @@ def download_file(url: str, destination: Path, overwrite: bool = False, dry_run:
     return "downloaded"
 
 
+def download_record(
+    record: Dict[str, object],
+    output_root: Path,
+    overwrite: bool,
+    dry_run: bool,
+) -> Tuple[Dict[str, object], Path, str, str]:
+    destination = output_path(output_root, record)
+    try:
+        status = download_file(
+            url=str(record["source_url"]),
+            destination=destination,
+            overwrite=overwrite,
+            dry_run=dry_run,
+        )
+        error = ""
+    except Exception as exc:  # pragma: no cover - runtime/network safeguard
+        status = "failed"
+        error = str(exc)
+    return record, destination, status, error
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Download CEO West Bengal ASD/MOM PDFs into this repo.")
     parser.add_argument("--district", help="District ID or partial district name, e.g. `1` or `COOCHBEHAR`.")
@@ -211,6 +262,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--doc-type", choices=sorted(DOC_TYPE_MAP), default="both", help="Which PDF family to download.")
     parser.add_argument("--output-root", type=Path, default=DEFAULT_OUTPUT_ROOT, help="Destination root folder.")
     parser.add_argument("--delay", type=float, default=0.15, help="Delay between AC requests in seconds.")
+    parser.add_argument("--workers", type=int, default=6, help="Parallel worker count for district lookup and PDF downloads.")
     parser.add_argument("--max-files", type=int, help="Stop after this many PDF records (useful for testing).")
     parser.add_argument("--overwrite", action="store_true", help="Re-download files that already exist.")
     parser.add_argument("--dry-run", action="store_true", help="List planned downloads without fetching PDFs.")
@@ -248,6 +300,17 @@ def main() -> int:
     skipped = 0
     failed = 0
 
+    records = collect_pdf_records(
+        districts=selected_districts,
+        doc_types=DOC_TYPE_MAP[args.doc_type],
+        ac_filter=args.ac,
+        delay_seconds=args.delay,
+        workers=max(1, args.workers),
+    )
+
+    if args.max_files is not None:
+        records = records[: args.max_files]
+
     with manifest_path.open("a", newline="", encoding="utf-8") as handle:
         fieldnames = [
             "district_id",
@@ -266,55 +329,49 @@ def main() -> int:
         if not file_exists:
             writer.writeheader()
 
-        for record in iter_pdf_records(
-            districts=selected_districts,
-            doc_types=DOC_TYPE_MAP[args.doc_type],
-            ac_filter=args.ac,
-            delay_seconds=args.delay,
-        ):
-            if args.max_files is not None and processed >= args.max_files:
-                break
-
-            processed += 1
-            destination = output_path(args.output_root, record)
-
-            try:
-                status = download_file(
-                    url=str(record["source_url"]),
-                    destination=destination,
-                    overwrite=args.overwrite,
-                    dry_run=args.dry_run,
-                )
-                error = ""
-            except Exception as exc:  # pragma: no cover - runtime/network safeguard
-                status = "failed"
-                error = str(exc)
-
-            if status == "downloaded":
-                downloaded += 1
-            elif status in {"skipped", "dry-run"}:
-                skipped += 1
-            else:
-                failed += 1
-
-            try:
-                local_path = str(destination.relative_to(repo_root()))
-            except ValueError:
-                local_path = str(destination)
-
-            row = {
-                **record,
-                "local_path": local_path,
-                "status": status,
-                "error": error,
-            }
-            writer.writerow(row)
-
-            print(
-                f"[{processed}] {status.upper():9} {record['doc_type']} | "
-                f"D{record['district_id']} AC{record['ac_id']} PS{record['ps_id']} -> {destination.name}",
-                flush=True,
+        if max(1, args.workers) == 1 or len(records) <= 1:
+            result_iter = (
+                download_record(record, args.output_root, args.overwrite, args.dry_run)
+                for record in records
             )
+        else:
+            executor = ThreadPoolExecutor(max_workers=min(max(1, args.workers), len(records)))
+            future_map = {
+                executor.submit(download_record, record, args.output_root, args.overwrite, args.dry_run): record
+                for record in records
+            }
+            result_iter = (future.result() for future in as_completed(future_map))
+
+        try:
+            for processed, (record, destination, status, error) in enumerate(result_iter, start=1):
+                if status == "downloaded":
+                    downloaded += 1
+                elif status in {"skipped", "dry-run"}:
+                    skipped += 1
+                else:
+                    failed += 1
+
+                try:
+                    local_path = str(destination.relative_to(repo_root()))
+                except ValueError:
+                    local_path = str(destination)
+
+                row = {
+                    **record,
+                    "local_path": local_path,
+                    "status": status,
+                    "error": error,
+                }
+                writer.writerow(row)
+
+                print(
+                    f"[{processed}] {status.upper():9} {record['doc_type']} | "
+                    f"D{record['district_id']} AC{record['ac_id']} PS{record['ps_id']} -> {destination.name}",
+                    flush=True,
+                )
+        finally:
+            if 'executor' in locals():
+                executor.shutdown(wait=True)
 
     print("\nSummary")
     print("-------")
