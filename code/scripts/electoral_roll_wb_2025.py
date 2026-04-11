@@ -42,6 +42,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from html import unescape
 from pathlib import Path
+from threading import Lock, current_thread
 from typing import Dict, Iterable, List, Optional, Tuple
 from urllib.parse import urlencode, urljoin, urlsplit
 from urllib.request import Request, urlopen
@@ -76,6 +77,14 @@ def repo_root() -> Path:
 
 
 DEFAULT_OUTPUT_ROOT = repo_root() / "data" / "raw" / "ceowestbengal" / "asd_sir"
+PRINT_LOCK = Lock()
+
+
+def log(message: str) -> None:
+    timestamp = time.strftime("%H:%M:%S")
+    worker = current_thread().name
+    with PRINT_LOCK:
+        print(f"[{timestamp}][{worker}] {message}", flush=True)
 
 
 def fetch_text(url: str, params: Optional[Dict[str, object]] = None, timeout: int = 60) -> str:
@@ -148,8 +157,9 @@ def collect_records_for_district(
 ) -> List[Dict[str, object]]:
     records: List[Dict[str, object]] = []
     dist_id = district["distId"]
+    log(f"START district {dist_id} | {district['name']}")
     ac_rows = fetch_json(BASE_URL, {"handler": "AC", "distId": dist_id})
-    print(f"[district {dist_id}] {district['name']} -> {len(ac_rows)} ACs", flush=True)
+    log(f"LOOKUP district {dist_id} | {district['name']} -> {len(ac_rows)} ACs")
 
     for ac in ac_rows:
         ac_id = int(ac["acId"])
@@ -158,7 +168,7 @@ def collect_records_for_district(
             continue
 
         ps_rows = fetch_json(BASE_URL, {"handler": "PS", "acId": ac_id})
-        print(f"  [ac {ac_id}] {ac_name} -> {len(ps_rows)} parts", flush=True)
+        log(f"AC {ac_id} | {ac_name} -> {len(ps_rows)} parts")
 
         for row in ps_rows:
             for doc_type in doc_types:
@@ -182,6 +192,7 @@ def collect_records_for_district(
         if delay_seconds:
             time.sleep(delay_seconds)
 
+    log(f"DONE district {dist_id} | {district['name']} -> {len(records)} PDF tasks")
     return records
 
 
@@ -300,6 +311,11 @@ def main() -> int:
     skipped = 0
     failed = 0
 
+    lookup_workers = min(max(1, args.workers), len(selected_districts))
+    log(
+        f"COLLECT phase -> {len(selected_districts)} district(s), {lookup_workers} worker(s), doc_type={args.doc_type}"
+    )
+
     records = collect_pdf_records(
         districts=selected_districts,
         doc_types=DOC_TYPE_MAP[args.doc_type],
@@ -329,13 +345,16 @@ def main() -> int:
         if not file_exists:
             writer.writeheader()
 
+        download_workers = min(max(1, args.workers), len(records)) if records else 1
+        log(f"DOWNLOAD phase -> {len(records)} file(s) queued, {download_workers} worker(s)")
+
         if max(1, args.workers) == 1 or len(records) <= 1:
             result_iter = (
                 download_record(record, args.output_root, args.overwrite, args.dry_run)
                 for record in records
             )
         else:
-            executor = ThreadPoolExecutor(max_workers=min(max(1, args.workers), len(records)))
+            executor = ThreadPoolExecutor(max_workers=download_workers)
             future_map = {
                 executor.submit(download_record, record, args.output_root, args.overwrite, args.dry_run): record
                 for record in records
@@ -364,10 +383,9 @@ def main() -> int:
                 }
                 writer.writerow(row)
 
-                print(
+                log(
                     f"[{processed}] {status.upper():9} {record['doc_type']} | "
-                    f"D{record['district_id']} AC{record['ac_id']} PS{record['ps_id']} -> {destination.name}",
-                    flush=True,
+                    f"D{record['district_id']} AC{record['ac_id']} PS{record['ps_id']} -> {destination.name}"
                 )
         finally:
             if 'executor' in locals():
