@@ -56,7 +56,10 @@ def normalize_status(value: str) -> str:
     return (value or "").strip().lower()
 
 
-def get_retry_candidates(manifest_path: Path) -> Tuple[List[Dict[str, str]], List[str]]:
+def get_retry_candidates(
+    manifest_path: Path,
+    doc_type: str,
+) -> Tuple[List[Dict[str, str]], List[str]]:
     with manifest_path.open("r", newline="", encoding="utf-8") as handle:
         reader = csv.DictReader(handle)
         fieldnames = list(reader.fieldnames or [])
@@ -72,6 +75,7 @@ def get_retry_candidates(manifest_path: Path) -> Tuple[List[Dict[str, str]], Lis
         row
         for row in latest_by_path.values()
         if normalize_status(row.get("status", "")) == "failed"
+        and (doc_type == "both" or (row.get("doc_type") or "").strip().lower() == doc_type)
     ]
     candidates.sort(
         key=lambda r: (
@@ -142,6 +146,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST, help="Path to manifest CSV.")
     parser.add_argument("--workers", type=int, default=8, help="Parallel download workers.")
     parser.add_argument("--timeout", type=int, default=120, help="HTTP timeout in seconds.")
+    parser.add_argument(
+        "--doc-type",
+        choices=["asd", "mom", "both"],
+        default="both",
+        help="Retry failures for only one document family.",
+    )
     parser.add_argument("--max-retries", type=int, help="Retry only the first N failed entries.")
     parser.add_argument("--dry-run", action="store_true", help="Do not download files; only simulate retries.")
     return parser
@@ -155,11 +165,14 @@ def main() -> int:
         log(f"Manifest not found: {manifest_path}")
         return 1
 
-    candidates, fieldnames = get_retry_candidates(manifest_path)
+    candidates, fieldnames = get_retry_candidates(manifest_path, args.doc_type)
     if args.max_retries is not None:
         candidates = candidates[: args.max_retries]
 
-    log(f"Found {len(candidates)} failed latest entries in {manifest_path}")
+    log(
+        f"Found {len(candidates)} failed latest entries in {manifest_path} "
+        f"for doc_type={args.doc_type}"
+    )
     if not candidates:
         log("Nothing to retry.")
         return 0
