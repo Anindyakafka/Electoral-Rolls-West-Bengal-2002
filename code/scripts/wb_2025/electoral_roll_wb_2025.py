@@ -21,13 +21,13 @@ CAPTCHA solving is needed.
 Examples
 --------
 # Download all ASDD PDFs for one district
-python code/scripts/electoral_roll_wb_2025.py --district COOCHBEHAR --doc-type asd
+python code/scripts/wb_2025/electoral_roll_wb_2025.py --district COOCHBEHAR --doc-type asd
 
 # Download both ASDD and MOM PDFs for all districts
-python code/scripts/electoral_roll_wb_2025.py --doc-type both
+python code/scripts/wb_2025/electoral_roll_wb_2025.py --doc-type both
 
 # Test the workflow without downloading files
-python code/scripts/electoral_roll_wb_2025.py --district 1 --max-files 10 --dry-run
+python code/scripts/wb_2025/electoral_roll_wb_2025.py --district 1 --max-files 10 --dry-run
 """
 
 from __future__ import annotations
@@ -73,7 +73,7 @@ SSL_CONTEXT = build_ssl_context()
 
 
 def repo_root() -> Path:
-    return Path(__file__).resolve().parents[2]
+    return Path(__file__).resolve().parents[3]
 
 
 DEFAULT_OUTPUT_ROOT = Path(r"D:\Electoral roll") / "ceowestbengal" / "asd_sir"

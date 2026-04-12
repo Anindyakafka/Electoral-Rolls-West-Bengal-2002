@@ -1,1 +1,119 @@
-# Electoral-Rolls-West-Bengal-2002
+# Electoral Rolls West Bengal
+
+This repository contains data engineering workflows for electoral roll PDF collection in West Bengal across two pipelines:
+
+- 2002-style booth roll collection from `ceowestbengal.nic.in`
+- 2025 ASD/MOM collection from `ceowestbengal.wb.gov.in/asd_sir/`
+
+## Repository layout
+
+```text
+.
+├─ code/
+│  ├─ scripts/
+│  │  ├─ wb_2002/
+│  │  │  ├─ fetch_booth_urls.py
+│  │  │  └─ download_booth_pdfs.py
+│  │  └─ wb_2025/
+│  │     ├─ electoral_roll_wb_2025.py
+│  │     └─ retry_failed_manifest_downloads.py
+│  └─ utils/
+├─ data/
+│  ├─ raw/
+│  │  └─ ceowestbengal/
+│  │     ├─ all_booth_urls.xlsx
+│  │     └─ asd_sir/
+│  ├─ interim/
+│  ├─ processed/
+│  └─ metadata/
+└─ PROJECT_LOG.md
+```
+
+## Pipeline A: WB 2002 booth rolls (nic.in)
+
+Step 1: collect booth-level PDF URLs into Excel
+
+```bash
+python code/scripts/wb_2002/fetch_booth_urls.py
+```
+
+- Produces `all_booths_urls.xlsx` in the current working directory.
+- Produces `data/raw/ceowestbengal/all_booth_urls.xlsx`.
+
+Step 2: download booth PDFs from Excel URL list
+
+```bash
+python code/scripts/wb_2002/download_booth_pdfs.py
+```
+
+- Reads `data/raw/ceowestbengal/all_booth_urls.xlsx` (and falls back to legacy `all_booths_urls.xlsx` if present).
+- Writes downloaded files under `data/raw/ceowestbengal/pdfs/<AC No - AC Name>/`.
+- Uses Selenium + Chrome and retries each booth up to 3 times.
+
+## Pipeline B: WB 2025 ASD/MOM rolls (wb.gov.in)
+
+Collect and download ASD/MOM PDFs directly from public JSON endpoints:
+
+```bash
+python code/scripts/wb_2025/electoral_roll_wb_2025.py --doc-type both --workers 6
+```
+
+Useful examples:
+
+```bash
+python code/scripts/wb_2025/electoral_roll_wb_2025.py --list-districts
+python code/scripts/wb_2025/electoral_roll_wb_2025.py --district COOCHBEHAR --doc-type asd --workers 6
+python code/scripts/wb_2025/electoral_roll_wb_2025.py --district 1 --max-files 10 --dry-run
+```
+
+Defaults:
+
+- Output root: `D:\Electoral roll\ceowestbengal\asd_sir\`
+- Manifest: `D:\Electoral roll\ceowestbengal\asd_sir\manifest.csv`
+
+## Retry failed 2025 downloads
+
+Retry only rows whose latest manifest status is failed:
+
+```bash
+python code/scripts/wb_2025/retry_failed_manifest_downloads.py --workers 8
+```
+
+Targeted retry examples:
+
+```bash
+python code/scripts/wb_2025/retry_failed_manifest_downloads.py --doc-type asd
+python code/scripts/wb_2025/retry_failed_manifest_downloads.py --max-retries 100
+python code/scripts/wb_2025/retry_failed_manifest_downloads.py --dry-run
+```
+
+## Dependencies
+
+Minimum Python version: 3.10+
+
+Core packages used across scripts:
+
+- `requests`
+- `beautifulsoup4`
+- `pandas`
+- `openpyxl` (for Excel I/O)
+- `selenium` (for browser-based PDF downloads in 2002 flow)
+
+Install all workflow requirements with:
+
+```bash
+pip install -r requirements.txt
+```
+
+Or install only one workflow:
+
+```bash
+pip install -r requirements/wb_2002.txt
+pip install -r requirements/wb_2025.txt
+```
+
+## Notes
+
+- The 2025 flow includes SSL compatibility handling for environments where legacy renegotiation causes handshake failures.
+- The 2025 site shows a browser CAPTCHA modal, but the script uses public endpoint data and direct PDF links.
+- Some source URLs may remain permanently unavailable (for example HTTP 404 at source).

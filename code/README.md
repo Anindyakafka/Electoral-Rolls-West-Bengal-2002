@@ -1,18 +1,19 @@
 # Code
 
-- `scripts/` — one-off or pipeline scripts
+- `scripts/` — workflow scripts grouped by data source/year
 - `notebooks/` — exploratory analysis notebooks
 - `utils/` — reusable helper code
 
-## Current scraper
+## Scripts layout
 
-- `scripts/electoral_roll_wb_2025.py` downloads the public ASD / BLO-BLA PDF lists from `https://ceowestbengal.wb.gov.in/asd_sir/`.
-- Default output goes to `D:\Electoral roll\ceowestbengal\asd_sir\`.
-- Parallel workers are supported with `--workers` for faster district/file processing.
-- Example: `python code/scripts/electoral_roll_wb_2025.py --district COOCHBEHAR --doc-type asd --workers 6`
+- `scripts/wb_2002/fetch_booth_urls.py` builds booth URL inventory from `ceowestbengal.nic.in` into an Excel file.
+- `scripts/wb_2002/download_booth_pdfs.py` reads the Excel file and downloads booth PDFs via Selenium.
+- `scripts/wb_2025/electoral_roll_wb_2025.py` downloads ASD/MOM PDFs from `https://ceowestbengal.wb.gov.in/asd_sir/` JSON-backed endpoints.
+- `scripts/wb_2025/retry_failed_manifest_downloads.py` retries only latest failed entries from the 2025 manifest.
 
-## Retry failed rows
+## Quick commands
 
-- `scripts/retry_failed_manifest_downloads.py` retries only manifest entries whose latest status is `failed`.
-- It writes files to the same `local_path` locations (including `D:\Electoral roll\...`) and appends retry results back to the same manifest.
-- Example: `python code/scripts/retry_failed_manifest_downloads.py --workers 8`
+- `python code/scripts/wb_2002/fetch_booth_urls.py`
+- `python code/scripts/wb_2002/download_booth_pdfs.py`
+- `python code/scripts/wb_2025/electoral_roll_wb_2025.py --doc-type both --workers 6`
+- `python code/scripts/wb_2025/retry_failed_manifest_downloads.py --workers 8`

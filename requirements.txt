@@ -1,0 +1,2 @@
+-r requirements/wb_2002.txt
+-r requirements/wb_2025.txt
