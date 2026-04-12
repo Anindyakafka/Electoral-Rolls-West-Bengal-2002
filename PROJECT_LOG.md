@@ -20,3 +20,6 @@
 - Added dependency manifests: `requirements.txt`, `requirements/wb_2002.txt`, and `requirements/wb_2025.txt`.
 - Updated WB 2002 scripts to use repo-anchored input/output defaults under `data/raw/ceowestbengal/`.
 - Standardized WB 2002 canonical URL inventory filename to `all_booth_urls.xlsx` with fallback support for legacy `all_booths_urls.xlsx`.
+- Added release packaging automation: `code/scripts/release/build_release_assets.py` for chunked zip creation, checksums, and GitHub CLI command generation.
+- Added `code/scripts/release/run_build_release_assets.ps1` with configured source paths for the current 2002 and 2025 data directories.
+- Documented release packaging flow and commands in root and code READMEs.

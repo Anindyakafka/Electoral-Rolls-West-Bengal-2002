@@ -37,7 +37,6 @@ Step 1: collect booth-level PDF URLs into Excel
 python code/scripts/wb_2002/fetch_booth_urls.py
 ```
 
-- Produces `all_booths_urls.xlsx` in the current working directory.
 - Produces `data/raw/ceowestbengal/all_booth_urls.xlsx`.
 
 Step 2: download booth PDFs from Excel URL list
@@ -110,6 +109,53 @@ Or install only one workflow:
 ```bash
 pip install -r requirements/wb_2002.txt
 pip install -r requirements/wb_2025.txt
+```
+
+## Build GitHub Release assets (large PDF folders)
+
+Use this when data is too large for git commits but each file is below GitHub's release-asset limit.
+
+Main builder script:
+
+```bash
+python code/scripts/release/build_release_assets.py \
+	--source "wb-2002=C:\Users\anind\Downloads\WB_2002_Electoral_Rolls_Downloader_2025-main\Data" \
+	--source "wb-2025=D:\Electoral roll\ceowestbengal\asd_sir" \
+	--output-dir "data/release_assets" \
+	--max-part-size-gb 1.8 \
+	--compression stored \
+	--preserve-root-folder \
+	--tag "wb-electoral-rolls-data-2026-04-12"
+```
+
+PowerShell helper with the same directories:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File code/scripts/release/run_build_release_assets.ps1
+```
+
+What it generates in `data/release_assets/`:
+
+- Chunked zip parts by dataset (`*_part001.zip`, `*_part002.zip`, ...)
+- `sha256sums.txt` with checksums for every zip
+- `release_notes.md` for release description
+- `gh_release_commands.txt` with ready-to-run `gh release` upload commands
+
+Recommendation:
+
+- Keep `--max-part-size-gb` at `1.8` or lower so every zip part stays under 2 GB.
+- `--preserve-root-folder` keeps each source folder tree rooted as `Data/...` and `asd_sir/...` inside zip assets.
+
+Publish assets to GitHub Release automatically:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File code/scripts/release/publish_release_assets.ps1 -Tag "wb-electoral-rolls-data-2026-04-12"
+```
+
+Preview publish commands without uploading:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File code/scripts/release/publish_release_assets.ps1 -Tag "wb-electoral-rolls-data-2026-04-12" -DryRun
 ```
 
 ## Notes
