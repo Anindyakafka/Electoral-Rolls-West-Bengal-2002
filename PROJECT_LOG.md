@@ -23,3 +23,12 @@
 - Added release packaging automation: `code/scripts/release/build_release_assets.py` for chunked zip creation, checksums, and GitHub CLI command generation.
 - Added `code/scripts/release/run_build_release_assets.ps1` with configured source paths for the current 2002 and 2025 data directories.
 - Documented release packaging flow and commands in root and code READMEs.
+- Hardened release rebuilds so old dataset zip parts are removed before regenerating assets.
+- Completed the low-disk GitHub Release uploader flow with release-summary updates, metadata asset uploads, and stale streamed-part cleanup under `-Clobber`.
+- Expanded README guidance for both prebuilt-asset publishing and one-part-at-a-time stream uploads.
+- Verified local source directories for 2002 and 2025 release packaging and confirmed a stream-upload plan of 13 parts for 2002 plus 98 parts for 2025 with preserved source-root structure inside each zip.
+- Updated the local on-disk `stream_release_upload.py` checkout to match the hardened uploader logic used in the repo workspace.
+- Attempted live release upload with the provided PAT, but GitHub rejected release creation with `403 Resource not accessible by personal access token`; the next step is rerunning the same command with a token that has release creation permissions.
+- Retried the live stream upload with a second PAT and received the same `403 Resource not accessible by personal access token` response on `POST /repos/Anindyakafka/Electoral-Rolls-West-Bengal-2002/releases`, confirming the remaining blocker is token permission scope rather than asset structure or local packaging.
+- Successfully started stream upload with a PAT that can create releases; mixed tag upload progressed through all 2002 parts and began early 2025 parts.
+- Switched to split release strategy on request: stopped the mixed run and started separate stream uploads under tags `wb-electoral-rolls-2002-2026-04-13` and `wb-electoral-rolls-2025-2026-04-13` with isolated temp and metadata directories.

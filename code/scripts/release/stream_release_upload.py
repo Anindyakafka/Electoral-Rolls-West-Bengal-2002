@@ -167,6 +167,21 @@ def get_or_create_release(owner: str, repo: str, tag: str, token: str) -> Dict:
     raise RuntimeError("Unexpected create release response format")
 
 
+def update_release_body(owner: str, repo: str, release_id: int, tag: str, body: str, token: str) -> Dict:
+    url = f"https://api.github.com/repos/{owner}/{repo}/releases/{release_id}"
+    payload = {
+        "tag_name": tag,
+        "name": tag,
+        "body": body,
+        "draft": False,
+        "prerelease": False,
+    }
+    updated = api_request("PATCH", url, token, json_body=payload)
+    if isinstance(updated, dict):
+        return updated
+    raise RuntimeError("Unexpected update release response format")
+
+
 def list_release_assets(owner: str, repo: str, release_id: int, token: str) -> List[Dict]:
     url = f"https://api.github.com/repos/{owner}/{repo}/releases/{release_id}/assets?per_page=100"
     result = api_request("GET", url, token)
@@ -178,7 +193,15 @@ def delete_release_asset(owner: str, repo: str, asset_id: int, token: str) -> No
     api_request("DELETE", url, token)
 
 
-def upload_asset(owner: str, repo: str, release_id: int, token: str, asset_path: Path, asset_name: str) -> Dict:
+def upload_asset(
+    owner: str,
+    repo: str,
+    release_id: int,
+    token: str,
+    asset_path: Path,
+    asset_name: str,
+    content_type: str = "application/octet-stream",
+) -> Dict:
     url = (
         f"https://uploads.github.com/repos/{owner}/{repo}/releases/{release_id}/assets"
         f"?name={parse.quote(asset_name)}"
@@ -190,7 +213,7 @@ def upload_asset(owner: str, repo: str, release_id: int, token: str, asset_path:
         "Authorization": f"Bearer {token}",
         "Accept": "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28",
-        "Content-Type": "application/zip",
+        "Content-Type": content_type,
         "Content-Length": str(asset_path.stat().st_size),
     }
 
@@ -228,6 +251,39 @@ def build_zip_part(zip_path: Path, part_entries: Sequence[FileEntry], compress: 
             archive.write(entry.source, arcname=entry.relative.as_posix())
 
 
+def sync_release_asset(
+    owner: str,
+    repo: str,
+    release_id: int,
+    token: str,
+    asset_path: Path,
+    asset_name: str,
+    assets_by_name: Dict[str, Dict],
+    *,
+    clobber: bool,
+    content_type: str,
+) -> None:
+    existing = assets_by_name.get(asset_name)
+    if existing and not clobber:
+        print(f"    skip upload (already exists): {asset_name}")
+        return
+
+    if existing:
+        delete_release_asset(owner, repo, int(existing["id"]), token)
+        assets_by_name.pop(asset_name, None)
+
+    uploaded = upload_asset(
+        owner,
+        repo,
+        release_id,
+        token,
+        asset_path,
+        asset_name,
+        content_type=content_type,
+    )
+    assets_by_name[asset_name] = uploaded
+
+
 def parse_repo(value: str) -> tuple[str, str]:
     if "/" not in value:
         raise argparse.ArgumentTypeError("--repo must be in OWNER/REPO format")
@@ -259,6 +315,9 @@ def main(argv: Sequence[str]) -> int:
     args = parse_args(argv)
     owner, repo = args.repo
     max_part_bytes = int(args.max_part_size_gb * (1024 ** 3))
+    if max_part_bytes <= 0:
+        print("max part size must be greater than zero", file=sys.stderr)
+        return 2
 
     token = os.environ.get(args.token_env, "").strip()
     if not token and not args.dry_run:
@@ -269,6 +328,7 @@ def main(argv: Sequence[str]) -> int:
     args.metadata_dir.mkdir(parents=True, exist_ok=True)
 
     release = None
+    release_id = 0
     assets_by_name: Dict[str, Dict] = {}
     if not args.dry_run:
         release = get_or_create_release(owner, repo, args.tag, token)
@@ -279,6 +339,9 @@ def main(argv: Sequence[str]) -> int:
 
     checksums_path = args.metadata_dir / f"{args.tag}_sha256sums.txt"
     notes_path = args.metadata_dir / f"{args.tag}_notes.md"
+
+    with checksums_path.open("w", encoding="utf-8", newline="\n") as handle:
+        handle.write("")
 
     summary_lines = [f"# Stream Upload Summary: {args.tag}", ""]
     compress = compression_mode(args.compression)
@@ -291,14 +354,30 @@ def main(argv: Sequence[str]) -> int:
         entries = collect_files(spec.path, args.preserve_root_folder)
         chunks = chunk_files(entries, max_part_bytes)
         dataset_slug = slugify(spec.name)
+        digits = max(3, int(math.log10(max(1, len(chunks)))) + 1)
+        planned_asset_names = {
+            f"{dataset_slug}_part{idx:0{digits}d}.zip"
+            for idx in range(1, len(chunks) + 1)
+        }
+
+        if not args.dry_run and args.clobber:
+            stale_asset_names = [
+                asset_name
+                for asset_name in list(assets_by_name)
+                if asset_name.startswith(f"{dataset_slug}_part")
+                and asset_name.endswith(".zip")
+                and asset_name not in planned_asset_names
+            ]
+            for asset_name in stale_asset_names:
+                delete_release_asset(owner, repo, int(assets_by_name[asset_name]["id"]), token)
+                assets_by_name.pop(asset_name, None)
+                print(f"    removed stale release asset: {asset_name}")
 
         summary_lines.append(f"## {spec.name}")
         summary_lines.append(f"- Source: {spec.path}")
         summary_lines.append(f"- Files: {len(entries)}")
         summary_lines.append(f"- Parts: {len(chunks)}")
         summary_lines.append("")
-
-        digits = max(3, int(math.log10(max(1, len(chunks)))) + 1)
 
         print(f"Dataset: {spec.name} | files={len(entries)} | parts={len(chunks)}")
         for idx, part_entries in enumerate(chunks, start=1):
@@ -310,17 +389,19 @@ def main(argv: Sequence[str]) -> int:
             if args.dry_run:
                 continue
 
-            existing = assets_by_name.get(asset_name)
-            if existing and not args.clobber:
-                print(f"    skip upload (already exists): {asset_name}")
-                continue
-
-            if existing and args.clobber:
-                delete_release_asset(owner, repo, int(existing["id"]), token)
-
             build_zip_part(zip_path, part_entries, compress)
             digest = sha256_file(zip_path)
-            upload_asset(owner, repo, release_id, token, zip_path, asset_name)
+            sync_release_asset(
+                owner,
+                repo,
+                release_id,
+                token,
+                zip_path,
+                asset_name,
+                assets_by_name,
+                clobber=args.clobber,
+                content_type="application/zip",
+            )
 
             with checksums_path.open("a", encoding="utf-8", newline="\n") as handle:
                 handle.write(f"{digest}  {asset_name}\n")
@@ -334,6 +415,32 @@ def main(argv: Sequence[str]) -> int:
 
     with notes_path.open("w", encoding="utf-8", newline="\n") as handle:
         handle.write("\n".join(summary_lines).strip() + "\n")
+
+    if not args.dry_run:
+        release_body = "\n".join(summary_lines).strip()
+        release = update_release_body(owner, repo, release_id, args.tag, release_body, token)
+        sync_release_asset(
+            owner,
+            repo,
+            release_id,
+            token,
+            notes_path,
+            notes_path.name,
+            assets_by_name,
+            clobber=True,
+            content_type="text/markdown; charset=utf-8",
+        )
+        sync_release_asset(
+            owner,
+            repo,
+            release_id,
+            token,
+            checksums_path,
+            checksums_path.name,
+            assets_by_name,
+            clobber=True,
+            content_type="text/plain; charset=utf-8",
+        )
 
     print(f"Metadata written: {notes_path}")
     print(f"Checksums written: {checksums_path}")

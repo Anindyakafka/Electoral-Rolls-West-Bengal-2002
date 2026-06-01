@@ -103,6 +103,13 @@ def compression_mode(name: str) -> int:
     return ZIP_DEFLATED if name == "deflated" else ZIP_STORED
 
 
+def remove_existing_parts(dataset_dir: Path, dataset_slug: str) -> None:
+    pattern = f"{dataset_slug}_part*.zip"
+    for existing in dataset_dir.glob(pattern):
+        if existing.is_file():
+            existing.unlink()
+
+
 def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -223,6 +230,10 @@ def main(argv: Sequence[str]) -> int:
         dataset_dir = output_root / dataset_slug
         entries = collect_files(source_dir, args.preserve_root_folder)
         chunks = chunk_files(entries, max_part_bytes)
+
+        if not args.dry_run:
+            dataset_dir.mkdir(parents=True, exist_ok=True)
+            remove_existing_parts(dataset_dir, dataset_slug)
 
         source_total_size = sum(entry.size_bytes for entry in entries)
         summary_lines.append(f"## {spec.name}")

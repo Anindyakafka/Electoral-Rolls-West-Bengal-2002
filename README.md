@@ -141,6 +141,10 @@ What it generates in `data/release_assets/`:
 - `release_notes.md` for release description
 - `gh_release_commands.txt` with ready-to-run `gh release` upload commands
 
+Rerun behavior:
+
+- Existing dataset zip parts in `data/release_assets/<dataset>/` are cleaned before rebuilding, so stale parts are not accidentally uploaded on the next release publish.
+
 Recommendation:
 
 - Keep `--max-part-size-gb` at `1.8` or lower so every zip part stays under 2 GB.
@@ -156,6 +160,25 @@ Preview publish commands without uploading:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File code/scripts/release/publish_release_assets.ps1 -Tag "wb-electoral-rolls-data-2026-04-12" -DryRun
+```
+
+Low-disk stream upload path:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File code/scripts/release/run_stream_release_upload.ps1 -Tag "wb-electoral-rolls-data-2026-04-12" -Clobber
+```
+
+This mode builds one zip part at a time in temporary storage, uploads it to the GitHub Release, and deletes the local part immediately. It also:
+
+- writes metadata files under `data/release_assets_stream/`
+- uploads `<tag>_notes.md` and `<tag>_sha256sums.txt` as release assets
+- updates the release description with the generated upload summary
+- removes stale `*_partNNN.zip` assets for a dataset when `-Clobber` is used
+
+Preview the stream plan without uploading:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File code/scripts/release/run_stream_release_upload.ps1 -Tag "wb-electoral-rolls-data-2026-04-12" -DryRun
 ```
 
 ## Notes
