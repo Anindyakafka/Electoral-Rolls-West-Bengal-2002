@@ -1,0 +1,22 @@
+variable,stage,type,description
+document_id,interim,string,Stable identifier derived from AC and part number
+source_relative_path,interim,string,PDF path relative to the external ASD root
+source_page,interim,integer,One-based PDF page containing the record
+source_table,interim,integer,One-based table number detected on the page
+source_row,interim,integer,One-based row number inside the detected table
+district_id,interim,integer,District directory numeric prefix
+district_slug,interim,string,District directory slug
+ac_id,interim,integer,Assembly constituency number
+ac_slug,interim,string,Assembly constituency directory slug
+part_id,interim,integer,Polling-part number from filename
+serial_number_raw,interim,string,Row serial number exactly as extracted
+epic_number_raw,interim,string,EPIC identifier exactly as extracted
+elector_name_raw,interim,string,Elector name in source language
+relation_type_raw,interim,string,Relationship category in source language
+relation_name_raw,interim,string,Related person's name in source language
+old_part_number_raw,interim,string,Previous roll part number
+old_serial_number_raw,interim,string,Previous roll serial number
+age_raw,interim,string,Age exactly as extracted
+gender_raw,interim,string,Gender category in source language
+uncollectable_reason_raw,interim,string,Removal/uncollectable reason in source language
+

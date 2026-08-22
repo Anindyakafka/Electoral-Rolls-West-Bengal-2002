@@ -1,0 +1,27 @@
+# Generated analysis data and logs
+data/interim/wb_2025_asd/*.csv
+data/interim/wb_2025_asd/*.parquet
+data/interim/wb_2025_asd/extraction_qa.json
+data/interim/wb_2025_asd/statewide_extraction_qa.json
+data/interim/wb_2025_asd/statewide_validation.json
+data/interim/wb_2025_asd/shards/
+data/processed/wb_2025_asd/*.csv
+data/processed/wb_2025_asd/*.dta
+data/processed/wb_2025_asd/*.parquet
+data/metadata/wb_2025_asd/pdf_manifest.csv
+data/metadata/wb_2025_asd/audit_summary.json
+outputs/logs/*
+outputs/tables/*
+outputs/figures/*
+!outputs/logs/.gitkeep
+!outputs/tables/.gitkeep
+!outputs/figures/.gitkeep
+
+# Release uploader runtime metadata
+data/release_assets_stream/
+
+# Python/editor artifacts
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.venv/

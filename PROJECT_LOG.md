@@ -32,3 +32,24 @@
 - Retried the live stream upload with a second PAT and received the same `403 Resource not accessible by personal access token` response on `POST /repos/Anindyakafka/Electoral-Rolls-West-Bengal-2002/releases`, confirming the remaining blocker is token permission scope rather than asset structure or local packaging.
 - Successfully started stream upload with a PAT that can create releases; mixed tag upload progressed through all 2002 parts and began early 2025 parts.
 - Switched to split release strategy on request: stopped the mixed run and started separate stream uploads under tags `wb-electoral-rolls-2002-2026-04-13` and `wb-electoral-rolls-2025-2026-04-13` with isolated temp and metadata directories.
+
+## 2026-08-22
+- Added a conventional analysis layout for the WB 2025 ASD corpus with external-raw,
+  interim, processed, metadata, notebook, output, and log directories.
+- Inventoried 80,655 ASD PDFs across 24 districts and 294 assembly constituencies;
+  identified four zero-byte source PDFs under AC 1 Mekliganj.
+- Confirmed that the reports expose Unicode text and ruled 10-column tables in Bengali,
+  English, and Devanagari, allowing direct extraction without corpus-wide OCR.
+- Added document auditing, district-sharded extraction, resumable statewide orchestration,
+  lineage documentation, a data dictionary, and final statewide validation tooling.
+- Replaced PyMuPDF's high-level table extraction after finding that it displaced Bengali
+  combining marks. The production method assigns one page-level word extraction into
+  geometric table cells, preserving text while substantially reducing runtime.
+- Rebuilt and validated the Kalimpong shard: 293 PDFs, 1,925 pages, and 17,331 records
+  with no duplicate keys, serial gaps, missing EPICs, or numeric-field failures.
+- Completed and structurally validated the Jhargram shard: 1,101 PDFs, 3,366 pages,
+  and 52,786 records. Source-cell tracing showed that 46 missing elector names and 49
+  missing relation names arise from invalid glyph mappings in the PDFs, not extractor loss.
+- Hardened the GitHub release uploader with transient retries, ambiguous-upload
+  reconciliation, incomplete-asset cleanup, and reuse of complete local ZIPs after an
+  interrupted transfer.

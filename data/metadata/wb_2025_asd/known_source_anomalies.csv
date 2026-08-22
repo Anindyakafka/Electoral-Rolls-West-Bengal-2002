@@ -1,0 +1,6 @@
+anomaly_type,source_relative_path,document_id,field,raw_value,verification,status,notes
+zero_byte_pdf,1_coochbehar/001_mekliganj/uncollectable_elector_report_ac1_part129.pdf,wb2025_asd_ac001_part0129,,,filesystem_size,exclude_unreadable,"Source PDF is zero bytes; no records can be extracted."
+zero_byte_pdf,1_coochbehar/001_mekliganj/uncollectable_elector_report_ac1_part130.pdf,wb2025_asd_ac001_part0130,,,filesystem_size,exclude_unreadable,"Source PDF is zero bytes; no records can be extracted."
+zero_byte_pdf,1_coochbehar/001_mekliganj/uncollectable_elector_report_ac1_part132.pdf,wb2025_asd_ac001_part0132,,,filesystem_size,exclude_unreadable,"Source PDF is zero bytes; no records can be extracted."
+zero_byte_pdf,1_coochbehar/001_mekliganj/uncollectable_elector_report_ac1_part133.pdf,wb2025_asd_ac001_part0133,,,filesystem_size,exclude_unreadable,"Source PDF is zero bytes; no records can be extracted."
+implausible_age,1_coochbehar/005_sitalkuchi/uncollectable_elector_report_ac5_part103.pdf,wb2025_asd_ac005_part0103,age_raw,125,pdf_table_and_page_text,retain_and_flag,"The source PDF explicitly reports age 125 for serial 1 (EPIC YSL2941276); raw value is preserved."

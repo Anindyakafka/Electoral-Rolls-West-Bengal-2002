@@ -19,6 +19,7 @@ import math
 import os
 import re
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Sequence
@@ -251,6 +252,34 @@ def build_zip_part(zip_path: Path, part_entries: Sequence[FileEntry], compress: 
             archive.write(entry.source, arcname=entry.relative.as_posix())
 
 
+def zip_matches_plan(zip_path: Path, part_entries: Sequence[FileEntry]) -> bool:
+    """Return true when an interrupted run left the complete planned ZIP behind."""
+    if not zip_path.is_file():
+        return False
+    try:
+        with ZipFile(zip_path, mode="r") as archive:
+            members = archive.infolist()
+            if len(members) != len(part_entries):
+                return False
+            for member, entry in zip(members, part_entries):
+                if member.filename != entry.relative.as_posix() or member.file_size != entry.size_bytes:
+                    return False
+            return archive.testzip() is None
+    except (OSError, ValueError):
+        return False
+
+
+def is_retryable_upload_error(exc: Exception) -> bool:
+    if isinstance(exc, (ConnectionError, TimeoutError, OSError, http.client.HTTPException)):
+        return True
+    message = str(exc)
+    match = re.search(r"Upload failed (\d{3})", message)
+    if match:
+        status = int(match.group(1))
+        return status in {408, 409, 422, 429} or status >= 500
+    return False
+
+
 def sync_release_asset(
     owner: str,
     repo: str,
@@ -262,26 +291,71 @@ def sync_release_asset(
     *,
     clobber: bool,
     content_type: str,
+    upload_attempts: int,
+    retry_delay_seconds: float,
 ) -> None:
     existing = assets_by_name.get(asset_name)
-    if existing and not clobber:
+    existing_is_complete = bool(
+        existing
+        and existing.get("state") == "uploaded"
+        and int(existing.get("size", -1)) == asset_path.stat().st_size
+    )
+    if existing_is_complete and not clobber:
         print(f"    skip upload (already exists): {asset_name}")
         return
 
     if existing:
         delete_release_asset(owner, repo, int(existing["id"]), token)
         assets_by_name.pop(asset_name, None)
+        state = existing.get("state", "unknown")
+        print(f"    removed incomplete or mismatched asset before upload: {asset_name} (state={state})")
 
-    uploaded = upload_asset(
-        owner,
-        repo,
-        release_id,
-        token,
-        asset_path,
-        asset_name,
-        content_type=content_type,
-    )
-    assets_by_name[asset_name] = uploaded
+    for attempt in range(1, upload_attempts + 1):
+        try:
+            uploaded = upload_asset(
+                owner,
+                repo,
+                release_id,
+                token,
+                asset_path,
+                asset_name,
+                content_type=content_type,
+            )
+            assets_by_name[asset_name] = uploaded
+            return
+        except Exception as exc:
+            # A reset can occur after GitHub accepted the complete request but before
+            # the response reached us. Reconcile by name and size before retrying.
+            remote = None
+            try:
+                refreshed = list_release_assets(owner, repo, release_id, token)
+                remote = next((item for item in refreshed if item.get("name") == asset_name), None)
+            except Exception as reconcile_exc:
+                print(f"    reconciliation failed: {reconcile_exc}", file=sys.stderr)
+
+            if remote and remote.get("state") == "uploaded" and int(remote.get("size", -1)) == asset_path.stat().st_size:
+                assets_by_name[asset_name] = remote
+                print(f"    upload confirmed after connection error: {asset_name}")
+                return
+
+            if remote:
+                try:
+                    delete_release_asset(owner, repo, int(remote["id"]), token)
+                    assets_by_name.pop(asset_name, None)
+                    print(f"    removed incomplete remote asset before retry: {asset_name}")
+                except Exception as cleanup_exc:
+                    print(f"    incomplete asset cleanup failed: {cleanup_exc}", file=sys.stderr)
+
+            if attempt >= upload_attempts or not is_retryable_upload_error(exc):
+                raise
+            delay = retry_delay_seconds * (2 ** (attempt - 1))
+            print(
+                f"    transient upload error on attempt {attempt}/{upload_attempts}: {exc}\n"
+                f"    retrying {asset_name} in {delay:.0f} seconds...",
+                file=sys.stderr,
+                flush=True,
+            )
+            time.sleep(delay)
 
 
 def parse_repo(value: str) -> tuple[str, str]:
@@ -307,6 +381,8 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     parser.add_argument("--preserve-root-folder", action="store_true", default=True)
     parser.add_argument("--no-preserve-root-folder", dest="preserve_root_folder", action="store_false")
     parser.add_argument("--clobber", action="store_true", help="Replace asset if it already exists.")
+    parser.add_argument("--upload-attempts", type=int, default=5, help="Attempts per asset for transient failures.")
+    parser.add_argument("--retry-delay-seconds", type=float, default=15.0, help="Initial exponential retry delay.")
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args(argv)
 
@@ -317,6 +393,9 @@ def main(argv: Sequence[str]) -> int:
     max_part_bytes = int(args.max_part_size_gb * (1024 ** 3))
     if max_part_bytes <= 0:
         print("max part size must be greater than zero", file=sys.stderr)
+        return 2
+    if args.upload_attempts < 1 or args.retry_delay_seconds < 0:
+        print("upload attempts must be positive and retry delay cannot be negative", file=sys.stderr)
         return 2
 
     token = os.environ.get(args.token_env, "").strip()
@@ -398,7 +477,10 @@ def main(argv: Sequence[str]) -> int:
                 print(f"    skip build/upload (release asset already exists): {asset_name}")
                 continue
 
-            build_zip_part(zip_path, part_entries, compress)
+            if zip_matches_plan(zip_path, part_entries):
+                print(f"    reusing complete local part from interrupted run: {zip_path}")
+            else:
+                build_zip_part(zip_path, part_entries, compress)
             digest = sha256_file(zip_path)
             sync_release_asset(
                 owner,
@@ -410,6 +492,8 @@ def main(argv: Sequence[str]) -> int:
                 assets_by_name,
                 clobber=args.clobber,
                 content_type="application/zip",
+                upload_attempts=args.upload_attempts,
+                retry_delay_seconds=args.retry_delay_seconds,
             )
 
             with checksums_path.open("a", encoding="utf-8", newline="\n") as handle:
@@ -438,6 +522,8 @@ def main(argv: Sequence[str]) -> int:
             assets_by_name,
             clobber=True,
             content_type="text/markdown; charset=utf-8",
+            upload_attempts=args.upload_attempts,
+            retry_delay_seconds=args.retry_delay_seconds,
         )
         sync_release_asset(
             owner,
@@ -449,6 +535,8 @@ def main(argv: Sequence[str]) -> int:
             assets_by_name,
             clobber=True,
             content_type="text/plain; charset=utf-8",
+            upload_attempts=args.upload_attempts,
+            retry_delay_seconds=args.retry_delay_seconds,
         )
 
     print(f"Metadata written: {notes_path}")
