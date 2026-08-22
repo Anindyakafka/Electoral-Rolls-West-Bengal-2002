@@ -53,3 +53,34 @@
 - Hardened the GitHub release uploader with transient retries, ambiguous-upload
   reconciliation, incomplete-asset cleanup, and reuse of complete local ZIPs after an
   interrupted transfer.
+
+## 2026-08-23
+- Completed extraction of all 24 WB 2025 ASD district shards: 80,655 source PDFs
+  attempted and 5,819,543 elector rows extracted. The only unreadable inputs are the
+  four previously inventoried zero-byte Mekliganj PDFs.
+- Combined the validated shards into
+  `data/interim/wb_2025_asd/removed_electors_raw.csv` (approximately 1.70 GB).
+- Passed every statewide validation gate: source/shard PDF counts, combined/shard row
+  counts, schema, unique document/serial keys, document contiguity, serial continuity,
+  EPIC completeness, numeric analysis fields, documented source errors, and source-cell
+  tracing for all missing names.
+- Confirmed and documented one source-reported age of 125 (AC 5, part 103, serial 1)
+  without altering the raw value; added `known_source_anomalies.csv` for downstream flags.
+- Corrected missing-cell QA to use word-midpoint table geometry, preventing header text
+  at cell boundaries from being misclassified as extractor loss while retaining a
+  NUL/replacement-glyph fallback for undecodable source text.
+- Built a row-level manifest for all 6,979 blank elector/relation name cells and ran a
+  glyph-level audit across all 3,092 affected PDFs. It classified 6,924 cells as destroyed
+  CID-0/`.notdef` content and 55 as genuinely blank, with zero extractor-loss, nonzero-glyph,
+  or diagnostic-error cases. EPIC IDs and exact PDF coordinates remain available for an
+  authoritative external cross-reference; names are never fabricated from square glyphs.
+- Added a streaming analysis-data builder and produced the row-preserving compressed
+  dataset with 5,819,543 records (252,175,942 bytes). All gender, relationship, and reason
+  labels map to documented canonical categories; all missing names carry source-condition
+  flags; every cleaning acceptance gate passed.
+- Expanded the data dictionary and category mapping register, documented the completed
+  processed stage, and rewrote the root README around the actual acquisition, extraction,
+  QA, cleaning, analysis, and resumable-release workflows.
+- Independently reread and validated all 5,819,543 compressed processed rows: schema,
+  record keys, document contiguity, EPIC completeness, numeric fields, category domains,
+  missing-name statuses, age flags, and gzip integrity all passed.

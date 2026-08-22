@@ -18,4 +18,9 @@
 10. The list describes people whose enumeration forms were not received. Treating every
     row as a legally final deletion requires substantive confirmation from election
     documentation; the dataset should initially use `uncollectable` terminology.
-
+11. The source generator replaced 6,924 name cells with repeated CID 0 characters.
+    CID 0 maps to the embedded font's `.notdef` square: the PDF contains neither the
+    original Unicode nor distinct visible glyph shapes, so OCR and reverse font mapping
+    cannot reconstruct these names. A further 55 name cells are empty in the source.
+    Preserve their EPIC identifiers and lineage for matching to another authoritative
+    roll; do not infer or fabricate names.

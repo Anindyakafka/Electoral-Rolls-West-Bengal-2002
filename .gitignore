@@ -6,13 +6,18 @@ data/interim/wb_2025_asd/statewide_extraction_qa.json
 data/interim/wb_2025_asd/statewide_validation.json
 data/interim/wb_2025_asd/shards/
 data/processed/wb_2025_asd/*.csv
+data/processed/wb_2025_asd/*.csv.gz
 data/processed/wb_2025_asd/*.dta
 data/processed/wb_2025_asd/*.parquet
+data/processed/wb_2025_asd/cleaning_qa.json
+data/processed/wb_2025_asd/validation.json
 data/metadata/wb_2025_asd/pdf_manifest.csv
 data/metadata/wb_2025_asd/audit_summary.json
 outputs/logs/*
 outputs/tables/*
 outputs/figures/*
+outputs/wb_2025_asd_ocr_pilot/
+outputs/mom_sample_page3.png
 !outputs/logs/.gitkeep
 !outputs/tables/.gitkeep
 !outputs/figures/.gitkeep
@@ -25,3 +30,4 @@ __pycache__/
 *.py[cod]
 .ipynb_checkpoints/
 .venv/
+tools/tessdata/

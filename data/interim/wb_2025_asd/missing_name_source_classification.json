@@ -1,0 +1,11 @@
+{
+  "manifest_cells": 6979,
+  "affected_documents": 3092,
+  "classified_cells": 6979,
+  "conditions": {
+    "destroyed_cid0_notdef": 6924,
+    "source_blank": 55
+  },
+  "all_cells_classified": true,
+  "output": "data\\interim\\wb_2025_asd\\missing_name_source_classification.csv"
+}

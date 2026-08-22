@@ -1,22 +1,37 @@
 variable,stage,type,description
-document_id,interim,string,Stable identifier derived from AC and part number
-source_relative_path,interim,string,PDF path relative to the external ASD root
-source_page,interim,integer,One-based PDF page containing the record
-source_table,interim,integer,One-based table number detected on the page
-source_row,interim,integer,One-based row number inside the detected table
-district_id,interim,integer,District directory numeric prefix
-district_slug,interim,string,District directory slug
-ac_id,interim,integer,Assembly constituency number
-ac_slug,interim,string,Assembly constituency directory slug
-part_id,interim,integer,Polling-part number from filename
+record_id,processed,string,Unique analysis-row identifier constructed as document_id:serial_number
+document_id,both,string,Stable identifier derived from AC and part number
+source_relative_path,both,string,PDF path relative to the external ASD root
+source_page,both,integer,One-based PDF page containing the record
+source_table,both,integer,One-based table number detected on the page
+source_row,both,integer,One-based row number inside the detected table
+district_id,both,integer,Source directory numeric prefix; not an official administrative code
+district_name,processed,string,Standardized display name for the district
+district_slug,both,string,District directory slug retained for lineage
+ac_id,both,integer,Assembly constituency number
+ac_name,processed,string,Display name derived from the source AC slug
+ac_slug,both,string,Assembly constituency directory slug retained for lineage
+part_id,both,integer,Polling-part number from the source filename
 serial_number_raw,interim,string,Row serial number exactly as extracted
+serial_number,processed,integer,Row serial number converted after numeric validation
 epic_number_raw,interim,string,EPIC identifier exactly as extracted
-elector_name_raw,interim,string,Elector name in source language
-relation_type_raw,interim,string,Relationship category in source language
-relation_name_raw,interim,string,Related person's name in source language
-old_part_number_raw,interim,string,Previous roll part number
-old_serial_number_raw,interim,string,Previous roll serial number
+epic_number,processed,string,Trimmed uppercase EPIC identifier; punctuation is retained
+elector_name_raw,interim,string,Elector name exactly as extracted in the source language
+elector_name,processed,string,NFC-normalized elector name with layout whitespace collapsed
+elector_name_status,processed,string,observed destroyed_cid0_notdef or source_blank
+relation_type_raw,both,string,Relationship category in the source language
+relation_type,processed,string,Canonical relationship category: father husband mother wife or other
+relation_name_raw,interim,string,Related person's name exactly as extracted
+relation_name,processed,string,NFC-normalized related-person name with layout whitespace collapsed
+relation_name_status,processed,string,observed destroyed_cid0_notdef or source_blank
+old_part_number_raw,interim,string,Previous-roll part number exactly as extracted
+old_part_number,processed,integer,Previous-roll part number converted after numeric validation
+old_serial_number_raw,interim,string,Previous-roll serial number exactly as extracted
+old_serial_number,processed,integer,Previous-roll serial number converted after numeric validation
 age_raw,interim,string,Age exactly as extracted
-gender_raw,interim,string,Gender category in source language
-uncollectable_reason_raw,interim,string,Removal/uncollectable reason in source language
-
+age,processed,integer,Age converted after numeric validation; source values are not winsorized
+age_above_120,processed,integer,One when source-reported age exceeds 120 and zero otherwise
+gender_raw,both,string,Gender category in the source language
+gender,processed,string,Canonical gender category: female male or other
+uncollectable_reason_raw,both,string,Uncollectable reason in the source language
+uncollectable_reason,processed,string,Canonical reason: death permanently_shifted untraceable_or_absent or already_enrolled

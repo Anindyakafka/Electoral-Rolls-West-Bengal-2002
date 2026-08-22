@@ -1,0 +1,36 @@
+variable,raw_value,canonical_value
+gender,মহিলা,female
+gender,F,female
+gender,महिला,female
+gender,পুরুষ,male
+gender,M,male
+gender,पुरुष,male
+gender,অন্যান্য,other
+gender,O,other
+relation_type,বাবা,father
+relation_type,Father,father
+relation_type,पिता,father
+relation_type,স্বামী,husband
+relation_type,Husband,husband
+relation_type,पति,husband
+relation_type,মা,mother
+relation_type,Mother,mother
+relation_type,माँ,mother
+relation_type,স্ত্রী,wife
+relation_type,Wife,wife
+relation_type,पत्नी,wife
+relation_type,অন্যান্য,other
+relation_type,Other,other
+relation_type,अन्य,other
+uncollectable_reason,মৃত,death
+uncollectable_reason,Death,death
+uncollectable_reason,मृत्यु,death
+uncollectable_reason,স্থায়ীভাবে স্থানান্তরিত,permanently_shifted
+uncollectable_reason,Permanently Shifted,permanently_shifted
+uncollectable_reason,स्थायी रूप से स्थानांतरित,permanently_shifted
+uncollectable_reason,খুঁজে পাওয়া যায়নি / অনুপস্থিত,untraceable_or_absent
+uncollectable_reason,Untraceable/Absent,untraceable_or_absent
+uncollectable_reason,पता न लगने योग्य/अनुपस्थित,untraceable_or_absent
+uncollectable_reason,ইতিমধ্যে তালিকাভুক্ত,already_enrolled
+uncollectable_reason,Already enrolled,already_enrolled
+uncollectable_reason,पहले से नामांकित,already_enrolled

@@ -1,0 +1,35 @@
+{
+  "input": "data\\interim\\wb_2025_asd\\removed_electors_raw.csv",
+  "manifest": "data\\interim\\wb_2025_asd\\missing_name_cells.csv",
+  "missing_cells": 6979,
+  "rows_with_any_missing_name": 3874,
+  "affected_documents": 3092,
+  "counts_by_field": {
+    "elector_name_raw": 3435,
+    "relation_name_raw": 3544
+  },
+  "counts_by_district": {
+    "10_south-24-parganas": 461,
+    "14_howrah": 1155,
+    "15_hooghly": 399,
+    "16_purbo-medinipur": 184,
+    "17_paschim-medinipur": 122,
+    "18_purulia": 310,
+    "19_bankura": 101,
+    "1_coochbehar": 77,
+    "20_purba-bardhaman": 179,
+    "21_birbhum": 205,
+    "22_alipurduar": 117,
+    "23_kalimpong": 62,
+    "24_jhargram": 95,
+    "25_paschim-bardhaman": 955,
+    "2_jalpaiguri": 81,
+    "3_darjeeling": 640,
+    "4_uttar-dinajpur": 256,
+    "5_dakhsin-dinajpur": 17,
+    "6_malda": 192,
+    "7_murshidabad": 159,
+    "8_nadia": 190,
+    "9_north-24-parganas": 1022
+  }
+}

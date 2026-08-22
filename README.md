@@ -1,200 +1,169 @@
-# Electoral Rolls West Bengal
+# West Bengal Electoral Roll Data
 
-This repository contains data engineering workflows for electoral roll PDF collection in West Bengal across two pipelines:
+Reproducible collection, extraction, validation, and analysis-preparation workflows for
+West Bengal electoral-roll data. The repository covers two distinct sources:
 
-- 2002-style booth roll collection from `ceowestbengal.nic.in`
-- 2025 ASD/MOM collection from `ceowestbengal.wb.gov.in/asd_sir/`
+- WB 2002 booth-level electoral-roll PDFs.
+- WB 2025 ASD/SIR documents, including the row-level list of electors whose enumeration
+  forms were reported as uncollectable.
+
+Large PDFs and generated datasets are published through GitHub Releases or kept in the
+documented external data directory. Git contains the code, schemas, mappings, QA summaries,
+and provenance records needed to rebuild them.
+
+## Current status
+
+The WB 2025 ASD extraction and cleaning pipeline is complete.
+
+| Item | Result |
+|---|---:|
+| Source ASD PDFs inventoried | 80,655 |
+| Readable PDFs | 80,651 |
+| Documented zero-byte PDFs | 4 |
+| Extracted elector records | 5,819,543 |
+| Duplicate document/serial keys | 0 |
+| Records missing an EPIC ID | 0 |
+| Analysis categories left unmapped | 0 |
+| Name cells destroyed as CID-0 in source | 6,924 |
+| Genuinely blank source name cells | 55 |
+
+The source PDFs call these records “uncollectable.” This repository does not assume that
+every record represents a legally final deletion.
 
 ## Repository layout
 
 ```text
-.
-├─ code/
-│  ├─ scripts/
-│  │  ├─ wb_2002/
-│  │  │  ├─ fetch_booth_urls.py
-│  │  │  └─ download_booth_pdfs.py
-│  │  └─ wb_2025/
-│  │     ├─ electoral_roll_wb_2025.py
-│  │     └─ retry_failed_manifest_downloads.py
-│  └─ utils/
-├─ data/
-│  ├─ raw/
-│  │  └─ ceowestbengal/
-│  │     ├─ all_booth_urls.xlsx
-│  │     └─ asd_sir/
-│  ├─ interim/
-│  ├─ processed/
-│  └─ metadata/
-└─ PROJECT_LOG.md
+code/
+  notebooks/                 exploratory and analysis notebooks
+  scripts/
+    wb_2002/                 2002 URL collection and PDF download
+    wb_2025/                 2025 ASD/MOM discovery and download
+    wb_2025_asd/             ASD audit, extraction, validation, and cleaning
+    release/                 GitHub Release packaging and resumable upload
+data/
+  raw/                       immutable inputs or pointers to external inputs
+  interim/wb_2025_asd/       source-faithful extraction and QA sidecars
+  processed/wb_2025_asd/     analysis-ready generated dataset
+  metadata/wb_2025_asd/      dictionary, mappings, anomalies, and lineage
+outputs/
+  figures/                   generated figures
+  tables/                    generated tables
+  logs/                      pipeline logs
+requirements/                workflow-specific Python dependencies
 ```
 
-## Pipeline A: WB 2002 booth rolls (nic.in)
+## WB 2025 ASD pipeline
 
-Step 1: collect booth-level PDF URLs into Excel
+The external source directory used by default is:
 
-```bash
+```text
+E:\Electoral roll\ceowestbengal\asd_sir\asd
+```
+
+Install dependencies and run the source audit and extraction:
+
+```powershell
+python -m pip install -r requirements/wb_2025_analysis.txt
+python code/scripts/wb_2025_asd/audit_pdf_corpus.py
+python code/scripts/wb_2025_asd/run_statewide_extraction.py --workers 4
+```
+
+The statewide runner creates resumable district shards, combines them, and executes the
+final validation gates. It produces the source-faithful interim file
+`data/interim/wb_2025_asd/removed_electors_raw.csv`.
+
+Audit absent names and build the analysis-ready dataset:
+
+```powershell
+python code/scripts/wb_2025_asd/build_missing_name_manifest.py
+python code/scripts/wb_2025_asd/classify_missing_name_cells.py
+python code/scripts/wb_2025_asd/build_analysis_dataset.py
+python code/scripts/wb_2025_asd/validate_analysis_dataset.py
+```
+
+The final generated file is
+`data/processed/wb_2025_asd/removed_electors_clean.csv.gz`. It has one row per elector,
+stable `record_id`, numeric identifiers, normalized names, canonical category codes,
+retained source-language categories, name-source status flags, an age-outlier flag, and
+complete PDF/page/table/row lineage. The raw extraction is never overwritten and no rows
+are filtered during cleaning.
+
+Key documentation:
+
+- [`data_dictionary.csv`](data/metadata/wb_2025_asd/data_dictionary.csv)
+- [`category_mappings.csv`](data/metadata/wb_2025_asd/category_mappings.csv)
+- [`lineage.md`](data/metadata/wb_2025_asd/lineage.md)
+- [`known_source_anomalies.csv`](data/metadata/wb_2025_asd/known_source_anomalies.csv)
+- [`obstacles.md`](data/metadata/wb_2025_asd/obstacles.md)
+
+Read the compressed dataset in chunks when memory is limited:
+
+```python
+import pandas as pd
+
+path = "data/processed/wb_2025_asd/removed_electors_clean.csv.gz"
+for chunk in pd.read_csv(path, chunksize=250_000):
+    # analysis here
+    pass
+```
+
+The statuses `destroyed_cid0_notdef` and `source_blank` are source limitations, not
+missingness introduced during extraction. CID 0 maps to the font's undefined square, so
+those names require matching to another authoritative roll by EPIC or old-part/old-serial
+identifiers; they must not be guessed.
+
+## WB 2002 pipeline
+
+```powershell
 python code/scripts/wb_2002/fetch_booth_urls.py
-```
-
-- Produces `data/raw/ceowestbengal/all_booth_urls.xlsx`.
-
-Step 2: download booth PDFs from Excel URL list
-
-```bash
 python code/scripts/wb_2002/download_booth_pdfs.py
 ```
 
-- Reads `data/raw/ceowestbengal/all_booth_urls.xlsx` (and falls back to legacy `all_booths_urls.xlsx` if present).
-- Writes downloaded files under `data/raw/ceowestbengal/pdfs/<AC No - AC Name>/`.
-- Uses Selenium + Chrome and retries each booth up to 3 times.
+The URL inventory is `data/raw/ceowestbengal/all_booth_urls.xlsx`. See
+[`code/scripts/wb_2002/README.md`](code/scripts/wb_2002/README.md) for browser and path
+requirements.
 
-## Pipeline B: WB 2025 ASD/MOM rolls (wb.gov.in)
+## WB 2025 document download
 
-Collect and download ASD/MOM PDFs directly from public JSON endpoints:
-
-```bash
+```powershell
 python code/scripts/wb_2025/electoral_roll_wb_2025.py --doc-type both --workers 6
+python code/scripts/wb_2025/retry_failed_manifest_downloads.py --workers 8
 ```
 
-Useful examples:
+See [`code/scripts/wb_2025/README.md`](code/scripts/wb_2025/README.md) for selectors and
+output-path options.
 
-```bash
-python code/scripts/wb_2025/electoral_roll_wb_2025.py --list-districts
-python code/scripts/wb_2025/electoral_roll_wb_2025.py --district COOCHBEHAR --doc-type asd --workers 6
-python code/scripts/wb_2025/electoral_roll_wb_2025.py --district 1 --max-files 10 --dry-run
+## GitHub Release uploads
+
+The low-disk uploader builds, uploads, verifies, and removes one local ZIP part at a time.
+It safely resumes by skipping complete release assets:
+
+```powershell
+$env:GITHUB_TOKEN = "<fine-grained PAT with Contents: read and write>"
+powershell -NoProfile -ExecutionPolicy Bypass `
+  -File code/scripts/release/run_stream_release_upload.ps1
 ```
 
 Defaults:
 
-- Output root: `D:\Electoral roll\ceowestbengal\asd_sir\`
-- Manifest: `D:\Electoral roll\ceowestbengal\asd_sir\manifest.csv`
+- Repository: `Anindyakafka/Electoral-Rolls-West-Bengal-2002`
+- Tag: `wb-electoral-rolls-2025-2026-04-13`
+- Source: `E:\Electoral roll\ceowestbengal\asd_sir`
+- Maximum ZIP part size: 1.8 GB
 
-## Retry failed 2025 downloads
+Do not commit access tokens. `-Clobber` intentionally replaces existing assets and should
+not be used for an ordinary resume.
 
-Retry only rows whose latest manifest status is failed:
+## Reproducibility rules
 
-```bash
-python code/scripts/wb_2025/retry_failed_manifest_downloads.py --workers 8
-```
+- External PDFs are immutable inputs.
+- Generated datasets, logs, and release assets are ignored by Git.
+- Every processed row retains its source coordinates.
+- Cleaning fails if a category is unmapped or a missing name lacks a source classification.
+- Source anomalies remain unchanged and are represented through flags and metadata.
+- Dataset lineage and material workflow changes are recorded in `PROJECT_LOG.md`.
 
-Targeted retry examples:
+## License
 
-```bash
-python code/scripts/wb_2025/retry_failed_manifest_downloads.py --doc-type asd
-python code/scripts/wb_2025/retry_failed_manifest_downloads.py --max-retries 100
-python code/scripts/wb_2025/retry_failed_manifest_downloads.py --dry-run
-```
-
-## Dependencies
-
-Minimum Python version: 3.10+
-
-Core packages used across scripts:
-
-- `requests`
-- `beautifulsoup4`
-- `pandas`
-- `openpyxl` (for Excel I/O)
-- `selenium` (for browser-based PDF downloads in 2002 flow)
-
-Install all workflow requirements with:
-
-```bash
-pip install -r requirements.txt
-```
-
-Or install only one workflow:
-
-```bash
-pip install -r requirements/wb_2002.txt
-pip install -r requirements/wb_2025.txt
-```
-
-## Build GitHub Release assets (large PDF folders)
-
-Use this when data is too large for git commits but each file is below GitHub's release-asset limit.
-
-Main builder script:
-
-```bash
-python code/scripts/release/build_release_assets.py \
-	--source "wb-2002=C:\Users\anind\Downloads\WB_2002_Electoral_Rolls_Downloader_2025-main\Data" \
-	--source "wb-2025=E:\Electoral roll\ceowestbengal\asd_sir" \
-	--output-dir "data/release_assets" \
-	--max-part-size-gb 1.8 \
-	--compression stored \
-	--preserve-root-folder \
-	--tag "wb-electoral-rolls-data-2026-04-12"
-```
-
-PowerShell helper with the same directories:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File code/scripts/release/run_build_release_assets.ps1
-```
-
-What it generates in `data/release_assets/`:
-
-- Chunked zip parts by dataset (`*_part001.zip`, `*_part002.zip`, ...)
-- `sha256sums.txt` with checksums for every zip
-- `release_notes.md` for release description
-- `gh_release_commands.txt` with ready-to-run `gh release` upload commands
-
-Rerun behavior:
-
-- Existing dataset zip parts in `data/release_assets/<dataset>/` are cleaned before rebuilding, so stale parts are not accidentally uploaded on the next release publish.
-
-Recommendation:
-
-- Keep `--max-part-size-gb` at `1.8` or lower so every zip part stays under 2 GB.
-- `--preserve-root-folder` keeps each source folder tree rooted as `Data/...` and `asd_sir/...` inside zip assets.
-
-Publish assets to GitHub Release automatically:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File code/scripts/release/publish_release_assets.ps1 -Tag "wb-electoral-rolls-data-2026-04-12"
-```
-
-Preview publish commands without uploading:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File code/scripts/release/publish_release_assets.ps1 -Tag "wb-electoral-rolls-data-2026-04-12" -DryRun
-```
-
-Low-disk stream upload path:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File code/scripts/release/run_stream_release_upload.ps1
-```
-
-This mode builds one zip part at a time in temporary storage, uploads it to the GitHub Release, and deletes the local part immediately. It also:
-
-- writes metadata files under `data/release_assets_stream/`
-- uploads `<tag>_notes.md` and `<tag>_sha256sums.txt` as release assets
-- updates the release description with the generated upload summary
-- removes stale `*_partNNN.zip` assets for a dataset when `-Clobber` is used
-
-Preview the stream plan without uploading:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File code/scripts/release/run_stream_release_upload.ps1 -DryRun
-```
-
-The stream helper now defaults to the outstanding 2025-only release:
-
-```powershell
-$env:GITHUB_TOKEN = "<fine-grained PAT with Contents: read and write>"
-powershell -ExecutionPolicy Bypass -File code/scripts/release/run_stream_release_upload.ps1
-```
-
-Its default source is `E:\Electoral roll\ceowestbengal\asd_sir`, and its default tag is
-`wb-electoral-rolls-2025-2026-04-13`. Rerunning without `-Clobber` resumes safely by
-skipping release assets that already exist. Use `-Clobber` only when intentionally
-replacing every existing 2025 part.
-
-## Notes
-
-- The 2025 flow includes SSL compatibility handling for environments where legacy renegotiation causes handshake failures.
-- The 2025 site shows a browser CAPTCHA modal, but the script uses public endpoint data and direct PDF links.
-- Some source URLs may remain permanently unavailable (for example HTTP 404 at source).
+See [`LICENSE`](LICENSE). Source electoral documents remain subject to the terms and legal
+status of their issuing authorities.
