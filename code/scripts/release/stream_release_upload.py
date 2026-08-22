@@ -389,6 +389,15 @@ def main(argv: Sequence[str]) -> int:
             if args.dry_run:
                 continue
 
+            existing = assets_by_name.get(asset_name)
+            existing_digest = str(existing.get("digest", "")) if existing else ""
+            if existing and not args.clobber and existing_digest.startswith("sha256:"):
+                digest = existing_digest.removeprefix("sha256:")
+                with checksums_path.open("a", encoding="utf-8", newline="\n") as handle:
+                    handle.write(f"{digest}  {asset_name}\n")
+                print(f"    skip build/upload (release asset already exists): {asset_name}")
+                continue
+
             build_zip_part(zip_path, part_entries, compress)
             digest = sha256_file(zip_path)
             sync_release_asset(

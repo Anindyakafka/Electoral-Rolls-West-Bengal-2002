@@ -1,16 +1,24 @@
 param(
     [string]$Repo = "Anindyakafka/Electoral-Rolls-West-Bengal-2002",
-    [string]$Tag = "wb-electoral-rolls-data-2026-04-12",
+    [string]$Tag = "wb-electoral-rolls-2025-2026-04-13",
+    [string]$Source = "E:\Electoral roll\ceowestbengal\asd_sir",
     [string]$TokenEnv = "GITHUB_TOKEN",
-    [string]$TempDir = "D:\release_stream_temp",
+    [string]$TempDir = "E:\release_stream_temp\wb-2025",
+    [string]$Python = "C:/Users/anind/AppData/Local/Programs/Python/Python313/python.exe",
     [switch]$Clobber,
     [switch]$DryRun
 )
 
-$python = "C:/Users/anind/AppData/Local/Programs/Python/Python313/python.exe"
 $scriptPath = Join-Path $PSScriptRoot "stream_release_upload.py"
 $repoRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSScriptRoot))
 $metaDir = Join-Path $repoRoot "data/release_assets_stream"
+
+if (-not (Test-Path -LiteralPath $Source -PathType Container)) {
+    throw "2025 source directory not found: $Source"
+}
+if (-not (Test-Path -LiteralPath $Python -PathType Leaf)) {
+    throw "Python executable not found: $Python"
+}
 
 if (-not $DryRun) {
     $token = [Environment]::GetEnvironmentVariable($TokenEnv, "Process")
@@ -29,8 +37,7 @@ $args = @(
     $scriptPath,
     "--repo", $Repo,
     "--tag", $Tag,
-    "--source", "wb-2002=C:\Users\anind\Downloads\WB_2002_Electoral_Rolls_Downloader_2025-main\Data",
-    "--source", "wb-2025=D:\Electoral roll\ceowestbengal\asd_sir",
+    "--source", "wb-2025=$Source",
     "--temp-dir", $TempDir,
     "--metadata-dir", $metaDir,
     "--max-part-size-gb", "1.8",
@@ -42,7 +49,7 @@ $args = @(
 if ($Clobber) { $args += "--clobber" }
 if ($DryRun) { $args += "--dry-run" }
 
-& $python @args
+& $Python @args
 if ($LASTEXITCODE -ne 0) {
     throw "stream_release_upload.py failed with exit code $LASTEXITCODE"
 }

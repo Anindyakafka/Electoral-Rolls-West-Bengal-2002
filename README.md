@@ -120,7 +120,7 @@ Main builder script:
 ```bash
 python code/scripts/release/build_release_assets.py \
 	--source "wb-2002=C:\Users\anind\Downloads\WB_2002_Electoral_Rolls_Downloader_2025-main\Data" \
-	--source "wb-2025=D:\Electoral roll\ceowestbengal\asd_sir" \
+	--source "wb-2025=E:\Electoral roll\ceowestbengal\asd_sir" \
 	--output-dir "data/release_assets" \
 	--max-part-size-gb 1.8 \
 	--compression stored \
@@ -165,7 +165,7 @@ powershell -ExecutionPolicy Bypass -File code/scripts/release/publish_release_as
 Low-disk stream upload path:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File code/scripts/release/run_stream_release_upload.ps1 -Tag "wb-electoral-rolls-data-2026-04-12" -Clobber
+powershell -ExecutionPolicy Bypass -File code/scripts/release/run_stream_release_upload.ps1
 ```
 
 This mode builds one zip part at a time in temporary storage, uploads it to the GitHub Release, and deletes the local part immediately. It also:
@@ -178,8 +178,20 @@ This mode builds one zip part at a time in temporary storage, uploads it to the 
 Preview the stream plan without uploading:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File code/scripts/release/run_stream_release_upload.ps1 -Tag "wb-electoral-rolls-data-2026-04-12" -DryRun
+powershell -ExecutionPolicy Bypass -File code/scripts/release/run_stream_release_upload.ps1 -DryRun
 ```
+
+The stream helper now defaults to the outstanding 2025-only release:
+
+```powershell
+$env:GITHUB_TOKEN = "<fine-grained PAT with Contents: read and write>"
+powershell -ExecutionPolicy Bypass -File code/scripts/release/run_stream_release_upload.ps1
+```
+
+Its default source is `E:\Electoral roll\ceowestbengal\asd_sir`, and its default tag is
+`wb-electoral-rolls-2025-2026-04-13`. Rerunning without `-Clobber` resumes safely by
+skipping release assets that already exist. Use `-Clobber` only when intentionally
+replacing every existing 2025 part.
 
 ## Notes
 
